@@ -1,0 +1,8 @@
+# Build output, crash reproducers, and coverage data are regenerated locally.
+target
+artifacts
+coverage
+
+# Track the curated seed corpus, but not the (large, machine-generated) inputs
+# libFuzzer accumulates while running.
+Cargo.lock

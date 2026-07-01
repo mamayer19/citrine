@@ -1,0 +1,65 @@
+#!/bin/sh
+set -e
+
+. "$HOME/.cargo/env"
+
+cd "$(dirname "$0")"
+
+cmd="${1:-}"
+if [ "$#" -gt 0 ]; then
+  shift
+fi
+
+usage() {
+  echo "Usage: ./dev {fmt|check|test|build|run|coverage|fuzz|fuzz-build|fuzz-list}" >&2
+  echo >&2
+  echo "  fmt         format all crates" >&2
+  echo "  check       fmt --check + clippy -D warnings + tests (full gate)" >&2
+  echo "  test        run the workspace tests (with the image feature)" >&2
+  echo "  build       release build of the \`citrine\` binary" >&2
+  echo "  run         run the release binary (build it first with 'build'); args pass through" >&2
+  echo "  coverage    workspace line coverage ('coverage html' writes an HTML report)" >&2
+  echo "  fuzz        fuzz a target (nightly): ./dev fuzz <target> [secs=30]" >&2
+  echo "  fuzz-build  build all cargo-fuzz targets (nightly)" >&2
+  echo "  fuzz-list   list cargo-fuzz targets" >&2
+}
+
+case "$cmd" in
+  fmt)
+    cargo fmt
+    ;;
+  check)
+    cargo fmt --check
+    cargo clippy --workspace --all-targets --features citrine-core/image -- -D warnings
+    cargo test --workspace --features citrine-core/image
+    ;;
+  test)
+    cargo test --workspace --features citrine-core/image
+    ;;
+  build)
+    cargo build --release -p citrine
+    ;;
+  run)
+    ./target/release/citrine "$@"
+    ;;
+  coverage)
+    if [ "${1:-}" = "html" ]; then
+      cargo llvm-cov --html --workspace --features citrine-core/image
+    else
+      cargo llvm-cov --summary-only --workspace --features citrine-core/image
+    fi
+    ;;
+  fuzz)
+    (cd crates/citrine-core && cargo +nightly fuzz run "$1" -- -max_total_time="${2:-30}")
+    ;;
+  fuzz-build)
+    (cd crates/citrine-core && cargo +nightly fuzz build)
+    ;;
+  fuzz-list)
+    (cd crates/citrine-core && cargo +nightly fuzz list)
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

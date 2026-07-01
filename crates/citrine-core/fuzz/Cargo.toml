@@ -1,0 +1,73 @@
+[package]
+name = "citrine-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.citrine-core]
+path = ".."
+features = ["image"]
+
+[[bin]]
+name = "fuzz_color_from_hex"
+path = "fuzz_targets/fuzz_color_from_hex.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_ghostty_import"
+path = "fuzz_targets/fuzz_ghostty_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_kitty_import"
+path = "fuzz_targets/fuzz_kitty_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_alacritty_import"
+path = "fuzz_targets/fuzz_alacritty_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_wezterm_import"
+path = "fuzz_targets/fuzz_wezterm_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_base16_import"
+path = "fuzz_targets/fuzz_base16_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_json_import"
+path = "fuzz_targets/fuzz_json_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_image_extract"
+path = "fuzz_targets/fuzz_image_extract.rs"
+test = false
+doc = false
+bench = false

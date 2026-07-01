@@ -1,0 +1,28 @@
+[package]
+name = "citrine"
+version = "0.1.0"
+edition = "2021"
+description = "A terminal color-scheme studio for editing a palette in a full-screen TUI, previewing it live, and exporting to real terminal configs."
+license = "GPL-3.0-or-later"
+repository = "https://github.com/mamayer19/citrine"
+homepage = "https://github.com/mamayer19/citrine"
+keywords = ["terminal", "tui", "color-scheme", "theme", "ratatui"]
+categories = ["command-line-utilities", "visualization"]
+
+[[bin]]
+name = "citrine"
+path = "src/main.rs"
+
+[dependencies]
+citrine-core = { path = "../citrine-core" }
+
+clap = { version = "4.6.1", features = ["derive"] }
+
+ratatui = "0.29"
+crossterm = "0.28"
+
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.8.20"
+
+[dev-dependencies]
+tempfile = "3.27.0"
