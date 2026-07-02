@@ -1,0 +1,83 @@
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-terminals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - term: kitty
+            install: sudo apt-get update && sudo apt-get install -y kitty xvfb
+            experimental: false
+          - term: alacritty
+            install: sudo apt-get update && sudo apt-get install -y alacritty xvfb
+            experimental: false
+          - term: foot
+            install: sudo apt-get update && sudo apt-get install -y foot weston
+            experimental: false
+          - term: konsole
+            install: sudo apt-get update && sudo apt-get install -y konsole imagemagick xvfb dbus-x11
+            experimental: false
+          - term: wezterm
+            install: curl -fsSLo /tmp/wezterm.deb https://github.com/wez/wezterm/releases/download/20240203-110809-5046fc22/wezterm-20240203-110809-5046fc22.Ubuntu22.04.deb && sudo apt-get update && sudo apt-get install -y /tmp/wezterm.deb xvfb
+            experimental: false
+          - term: rio
+            install: gh release download --repo raphamorim/rio --pattern "*amd64.deb" --output /tmp/rio.deb && sudo apt-get update && sudo apt-get install -y /tmp/rio.deb xvfb
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: ${{ matrix.install }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: cargo build --release -p citrine
+      - run: |
+          Xvfb :99 -screen 0 1280x800x24 &
+          sleep 2
+          export DISPLAY=:99
+          export CITRINE_BIN=$PWD/target/release/citrine
+          export SENTINEL=$PWD/ci/sentinel.json
+          sh ci/verify/${{ matrix.term }}.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-${{ matrix.term }}
+          path: verify-out/
+          if-no-files-found: ignore
+
+  macos-terminals:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - term: ghostty
+            experimental: false
+          - term: iterm2
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          if [ "${{ matrix.term }}" = iterm2 ]; then brew install --cask iterm2; else brew install --cask ghostty; fi
+      - run: cargo build --release -p citrine
+      - run: CITRINE_BIN=$PWD/target/release/citrine SENTINEL=$PWD/ci/sentinel.json sh ci/verify/${{ matrix.term }}.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-${{ matrix.term }}
+          path: verify-out/
+          if-no-files-found: ignore

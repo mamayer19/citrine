@@ -1,0 +1,30 @@
+{
+  "name": "Citrine Sentinel",
+  "author": null,
+  "variant": "dark",
+  "background": "#101317",
+  "foreground": "#e3e0d7",
+  "cursor": "#ff6f00",
+  "cursor_text": "#00204f",
+  "selection_background": "#143f2b",
+  "selection_foreground": "#f0d8ff",
+  "ansi": [
+    "#2040b0",
+    "#2142ad",
+    "#2244aa",
+    "#2346a7",
+    "#2448a4",
+    "#254aa1",
+    "#264c9e",
+    "#274e9b",
+    "#285098",
+    "#295295",
+    "#2a5492",
+    "#2b568f",
+    "#2c588c",
+    "#2d5a89",
+    "#2e5c86",
+    "#2f5e83"
+  ],
+  "minimum_contrast": null
+}

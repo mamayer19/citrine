@@ -17,3 +17,4 @@ crates/citrine-core/fuzz/coverage
 PRD.md
 TASKS.md
 DISTRIBUTION.md
+verify-out/
