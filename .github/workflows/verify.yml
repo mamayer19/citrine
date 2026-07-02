@@ -73,7 +73,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: |
-          if [ "${{ matrix.term }}" = iterm2 ]; then brew install --cask --no-quarantine iterm2; else brew install --cask ghostty; fi
+          if [ "${{ matrix.term }}" = iterm2 ]; then brew install --cask iterm2; else brew install --cask ghostty; fi
       - run: cargo build --release -p citrine
       - run: CITRINE_BIN=$PWD/target/release/citrine SENTINEL=$PWD/ci/sentinel.json sh ci/verify/${{ matrix.term }}.sh
         timeout-minutes: 8
