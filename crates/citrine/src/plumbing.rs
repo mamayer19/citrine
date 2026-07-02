@@ -57,6 +57,13 @@ pub struct ProbeArgs {
         help = "Reply timeout in milliseconds"
     )]
     timeout_ms: u64,
+    #[arg(
+        long,
+        value_name = "N",
+        default_value_t = 0,
+        help = "Per-channel tolerance for color comparison"
+    )]
+    tolerance: u8,
 }
 
 #[derive(clap::Args, Debug)]
@@ -132,7 +139,7 @@ pub fn run_probe(args: ProbeArgs) -> Result<i32, Box<dyn Error>> {
     let slots = parse_checks(&args.checks)?;
     let replies = collect_replies(&slots, args.timeout_ms);
     let got = replies.unwrap_or_default();
-    let report = build_report(&expected, &slots, &got);
+    let report = build_report(&expected, &slots, &got, args.tolerance);
     write_report(&args.out, &report)?;
     if got.is_empty() {
         return Ok(3);
@@ -285,17 +292,23 @@ struct ProbeResult {
     status: String,
 }
 
+fn within_tolerance(a: Color, b: Color, tolerance: u8) -> bool {
+    let d = |x: u8, y: u8| x.abs_diff(y) <= tolerance;
+    d(a.r, b.r) && d(a.g, b.g) && d(a.b, b.b)
+}
+
 fn build_report(
     expected: &Palette,
     slots: &[ReplySlot],
     got: &HashMap<ReplySlot, Color>,
+    tolerance: u8,
 ) -> ProbeReport {
     let mut results = Vec::with_capacity(slots.len());
     let mut matched = 0usize;
     for slot in slots {
         let want = slot.expected_color(expected);
         let (actual, status) = match got.get(slot) {
-            Some(c) if *c == want => {
+            Some(c) if within_tolerance(*c, want, tolerance) => {
                 matched += 1;
                 (Some(c.to_hex()), "ok")
             }
@@ -666,7 +679,7 @@ mod tests {
         let mut got = HashMap::new();
         got.insert(ReplySlot::Ansi(0), Color::rgb(0x20, 0x40, 0xb0));
         got.insert(ReplySlot::Foreground, Color::rgb(0x00, 0x00, 0x00));
-        let report = build_report(&p, &slots, &got);
+        let report = build_report(&p, &slots, &got, 0);
         assert!(!report.pass);
         assert_eq!(report.checked, 3);
         assert_eq!(report.matched, 1);
@@ -694,9 +707,25 @@ mod tests {
         for slot in &slots {
             got.insert(*slot, slot.expected_color(&p));
         }
-        let report = build_report(&p, &slots, &got);
+        let report = build_report(&p, &slots, &got, 0);
         assert!(report.pass);
         assert_eq!(report.checked, 19);
         assert_eq!(report.matched, 19);
+    }
+
+    #[test]
+    fn tolerance_accepts_small_shifts_and_rejects_large_ones() {
+        let p = sentinel();
+        let slots = vec![ReplySlot::Ansi(0)];
+        let mut got = HashMap::new();
+        got.insert(ReplySlot::Ansi(0), Color::rgb(0x27, 0x3f, 0xaa));
+        let strict = build_report(&p, &slots, &got, 0);
+        assert!(!strict.pass);
+        let tolerant = build_report(&p, &slots, &got, 16);
+        assert!(tolerant.pass);
+        let mut far = HashMap::new();
+        far.insert(ReplySlot::Ansi(0), Color::rgb(0x15, 0x18, 0x1d));
+        let rejected = build_report(&p, &slots, &far, 16);
+        assert!(!rejected.pass);
     }
 }

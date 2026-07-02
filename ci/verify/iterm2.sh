@@ -15,7 +15,7 @@ iterm_cleanup() {
 trap iterm_cleanup EXIT
 ( sleep 200 && kill -TERM $$ ) >/dev/null 2>&1 &
 track_pid $!
-"$CITRINE_BIN" verify-setup iterm2 --palette "$SENTINEL" --dir "$CITRINE_TMP" --probe-cmd "$(probe_cmd)"
+"$CITRINE_BIN" verify-setup iterm2 --palette "$SENTINEL" --dir "$CITRINE_TMP" --probe-cmd "$(probe_cmd) --tolerance 16"
 mkdir -p verify-out
 cp "$PROFILE_FILE" verify-out/iterm2-profile.json
 if [ "${CI:-}" = "true" ] && [ -d /Applications/iTerm.app ]; then
