@@ -24,7 +24,9 @@ mkdir -p "$HOME/.config"
 printf '[Desktop Entry]\nDefaultProfile=citrine.profile\n' > "$HOME/.config/konsolerc"
 mkdir -p verify-out
 ls -la "$SCHEME_DIR" > verify-out/konsole-datadir.txt 2>&1 || true
-konsole --profile citrine.profile -p ColorScheme=CitrineSentinel -e sh -c "$(probe_cmd)" > "$CITRINE_TMP/konsole.log" 2>&1 &
+cp "$SCHEME_DIR/CitrineSentinel.colorscheme" verify-out/ 2>/dev/null || true
+konsole --list-profiles > verify-out/konsole-profiles.txt 2>&1 || true
+KONSOLE_PROFILE_NAME=citrine konsole --profile "$SCHEME_DIR/citrine.profile" -p ColorScheme=CitrineSentinel -e sh -c "$(probe_cmd)" > "$CITRINE_TMP/konsole.log" 2>&1 &
 track_pid $!
 wait_for_file "$RESULT" 60 || true
 mkdir -p verify-out

@@ -64,11 +64,20 @@ echo "iterm2: guid=$GUID"
 defaults write com.googlecode.iterm2 SUEnableAutomaticChecks -bool false
 defaults write com.googlecode.iterm2 PromptOnQuit -bool false
 defaults write com.googlecode.iterm2 NoSyncTipsDisabled -bool true
+defaults write com.googlecode.iterm2 NoSyncOnboardingWindowHasBeenShown -bool true
 defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "$GUID"
-echo "iterm2: defaults written, launching"
+echo "iterm2: defaults written, warm-up launch"
 
 open -na iTerm >/dev/null 2>&1 &
 LAUNCHED=1
+sleep 12
+if [ "${CI:-}" = "true" ]; then
+  pkill -x iTerm2 >/dev/null 2>&1 || true
+  sleep 4
+fi
+echo "iterm2: warm-up done, real launch"
+
+open -na iTerm >/dev/null 2>&1 &
 echo "iterm2: open dispatched, waiting for result"
 
 if ! wait_for_file "$tmp/result.json" 40; then
@@ -79,6 +88,9 @@ if ! wait_for_file "$tmp/result.json" 40; then
   kill "$OSA_PID" >/dev/null 2>&1 || true
 fi
 echo "iterm2: wait phase done"
+if [ "${CI:-}" = "true" ]; then
+  screencapture -x "$OUT_DIR/iterm2-screen.png" >/dev/null 2>&1 || true
+fi
 
 if [ "${CI:-}" = "true" ]; then
   pkill -x iTerm2 >/dev/null 2>&1 || true
