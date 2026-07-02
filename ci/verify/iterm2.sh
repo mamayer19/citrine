@@ -1,63 +1,23 @@
 #!/bin/sh
 set -eu
-
-wait_for_file() {
-  wf_path=$1
-  wf_secs=$2
-  wf_n=0
-  while [ "$wf_n" -lt "$wf_secs" ]; do
-    if [ -s "$wf_path" ]; then
-      return 0
-    fi
-    sleep 1
-    wf_n=$((wf_n + 1))
-  done
-  [ -s "$wf_path" ]
-}
-
-: "${CITRINE_BIN:?CITRINE_BIN is required}"
-: "${SENTINEL:?SENTINEL is required}"
-
-OUT_DIR=$PWD/verify-out
-mkdir -p "$OUT_DIR"
-
-tmp=$(mktemp -d)
-PROFILE_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
-PROFILE_FILE="$PROFILE_DIR/citrine-sentinel.json"
+. "$(dirname "$0")/common.sh"
+mk_tmp
+RESULT="$CITRINE_TMP/result.json"
+PROFILE_FILE="$HOME/Library/Application Support/iTerm2/DynamicProfiles/citrine-sentinel.json"
 LAUNCHED=0
-
-WATCHDOG_PID=""
-cleanup() {
-  if [ -n "$WATCHDOG_PID" ]; then
-    kill "$WATCHDOG_PID" >/dev/null 2>&1 || true
-  fi
+iterm_cleanup() {
   if [ "$LAUNCHED" -eq 1 ] && [ "${CI:-}" = "true" ]; then
     pkill -x iTerm2 >/dev/null 2>&1 || true
   fi
   rm -f "$PROFILE_FILE"
+  citrine_cleanup
 }
-trap cleanup EXIT INT TERM
+trap iterm_cleanup EXIT
 ( sleep 200 && kill -TERM $$ ) >/dev/null 2>&1 &
-WATCHDOG_PID=$!
-
-cat > "$tmp/run.sh" <<EOF
-#!/bin/sh
-"$CITRINE_BIN" probe --expect "$SENTINEL" --out "$tmp/result.json" --checks ansi,fg,bg
-echo \$? > "$tmp/probe-exit"
-exit 0
-EOF
-chmod +x "$tmp/run.sh"
-
-mkdir -p "$PROFILE_DIR"
-
-"$CITRINE_BIN" export iterm2 --palette "$SENTINEL" --out "$tmp/citrine-sentinel.json"
-plutil -convert xml1 -o /dev/null "$tmp/citrine-sentinel.json"
-plutil -replace Profiles.0.Command -string "$tmp/run.sh" "$tmp/citrine-sentinel.json"
-plutil -replace "Profiles.0.Custom Command" -string Yes "$tmp/citrine-sentinel.json"
-plutil -convert xml1 -o /dev/null "$tmp/citrine-sentinel.json"
-cp "$tmp/citrine-sentinel.json" "$PROFILE_FILE"
-cp "$tmp/citrine-sentinel.json" "$OUT_DIR/iterm2-profile.json"
-
+track_pid $!
+"$CITRINE_BIN" verify-setup iterm2 --palette "$SENTINEL" --dir "$CITRINE_TMP" --probe-cmd "$(probe_cmd)"
+mkdir -p verify-out
+cp "$PROFILE_FILE" verify-out/iterm2-profile.json
 if [ "${CI:-}" = "true" ] && [ -d /Applications/iTerm.app ]; then
   xattr -dr com.apple.quarantine /Applications/iTerm.app >/dev/null 2>&1 || true
 fi
@@ -70,51 +30,30 @@ defaults write com.googlecode.iterm2 NoSyncTipsDisabled -bool true
 defaults write com.googlecode.iterm2 NoSyncOnboardingWindowHasBeenShown -bool true
 defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "$GUID"
 echo "iterm2: defaults written, warm-up launch"
-
-open -na iTerm >/dev/null 2>&1 &
+ls -d /Applications/iTerm.app > verify-out/iterm2-open.log 2>&1 || true
+open -na /Applications/iTerm.app >> verify-out/iterm2-open.log 2>&1 &
 LAUNCHED=1
-sleep 12
+sleep 20
 if [ "${CI:-}" = "true" ]; then
   pkill -x iTerm2 >/dev/null 2>&1 || true
-  sleep 4
+  sleep 5
 fi
 echo "iterm2: warm-up done, real launch"
-
-open -na iTerm >/dev/null 2>&1 &
+open -na /Applications/iTerm.app >> verify-out/iterm2-open.log 2>&1 &
 echo "iterm2: open dispatched, waiting for result"
-
-if ! wait_for_file "$tmp/result.json" 40; then
+if ! wait_for_file "$RESULT" 40; then
   echo "iterm2: no result yet, trying applescript window"
-  osascript -e 'tell application "iTerm2" to create window with profile "Citrine Sentinel"' > "$OUT_DIR/iterm2-launch.log" 2>&1 &
-  OSA_PID=$!
-  wait_for_file "$tmp/result.json" 50 || true
-  kill "$OSA_PID" >/dev/null 2>&1 || true
+  osascript -e 'tell application id "com.googlecode.iterm2" to activate' -e 'delay 2' -e 'tell application id "com.googlecode.iterm2" to create window with profile "Citrine Sentinel"' > verify-out/iterm2-launch.log 2>&1 &
+  track_pid $!
+  wait_for_file "$RESULT" 50 || true
 fi
 echo "iterm2: wait phase done"
 if [ "${CI:-}" = "true" ]; then
-  screencapture -x "$OUT_DIR/iterm2-screen.png" >/dev/null 2>&1 || true
+  screencapture -x verify-out/iterm2-screen.png >/dev/null 2>&1 || true
 fi
-
 if [ "${CI:-}" = "true" ]; then
   pkill -x iTerm2 >/dev/null 2>&1 || true
 fi
 LAUNCHED=0
-
-if [ ! -s "$tmp/result.json" ]; then
-  echo "iterm2 verify: no result produced" >&2
-  exit 1
-fi
-
-cp "$tmp/result.json" "$OUT_DIR/iterm2-result.json"
-cat "$tmp/result.json"
-
-status=1
-if grep -Eq '"pass"[[:space:]]*:[[:space:]]*true' "$tmp/result.json"; then
-  status=0
-elif [ -s "$tmp/probe-exit" ]; then
-  status=$(cat "$tmp/probe-exit")
-  if [ "$status" -eq 0 ]; then
-    status=1
-  fi
-fi
-exit "$status"
+cp "$RESULT" verify-out/iterm2-result.json 2>/dev/null || true
+finish "$RESULT"

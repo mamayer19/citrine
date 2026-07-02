@@ -6,8 +6,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use citrine_core::formats::format_by_id;
 use citrine_core::palette::Palette;
+
+use crate::adapters::{adapter_by_id, adapters, TerminalAdapter};
 
 #[derive(Clone, Debug)]
 pub struct Roots {
@@ -71,129 +72,13 @@ fn data_fallback_key() -> Option<&'static str> {
     None
 }
 
-pub struct Terminal {
-    pub id: &'static str,
-    pub format_id: &'static str,
-    pub file_extension: &'static str,
-    pub reload_hint: &'static str,
-    pub can_import: bool,
-    theme_dir_fn: fn(&Roots) -> PathBuf,
-    config_dir_fn: fn(&Roots) -> PathBuf,
+pub fn terminals() -> &'static [&'static dyn TerminalAdapter] {
+    adapters()
 }
 
-impl Terminal {
-    pub fn theme_dir(&self, roots: &Roots) -> PathBuf {
-        (self.theme_dir_fn)(roots)
-    }
-
-    pub fn config_dir(&self, roots: &Roots) -> PathBuf {
-        (self.config_dir_fn)(roots)
-    }
-
-    pub fn present(&self, roots: &Roots) -> bool {
-        self.config_dir(roots).is_dir()
-    }
-
-    pub fn display_name(&self) -> &'static str {
-        format_by_id(self.format_id)
-            .expect("terminal format_id is a registered core format")
-            .display_name()
-    }
+pub fn find(id: &str) -> Option<&'static dyn TerminalAdapter> {
+    adapter_by_id(id)
 }
-
-pub fn terminals() -> &'static [Terminal] {
-    TERMINALS
-}
-
-pub fn find(id: &str) -> Option<&'static Terminal> {
-    TERMINALS.iter().find(|t| t.id == id)
-}
-
-static TERMINALS: &[Terminal] = &[
-    Terminal {
-        id: "ghostty",
-        format_id: "ghostty",
-        file_extension: "",
-        reload_hint: "Reload Ghostty: Cmd+Shift+, (or restart).",
-        can_import: true,
-        theme_dir_fn: |r| r.config.join("ghostty").join("themes"),
-        config_dir_fn: |r| r.config.join("ghostty"),
-    },
-    Terminal {
-        id: "kitty",
-        format_id: "kitty",
-        file_extension: "conf",
-        reload_hint: "Add `include themes/<file>` to kitty.conf, then restart or `kitty @ set-colors -a themes/<file>`.",
-        can_import: true,
-        theme_dir_fn: |r| r.config.join("kitty").join("themes"),
-        config_dir_fn: |r| r.config.join("kitty"),
-    },
-    Terminal {
-        id: "alacritty",
-        format_id: "alacritty",
-        file_extension: "toml",
-        reload_hint: "Add the file to `[general] import` in alacritty.toml (live-reloads).",
-        can_import: true,
-        theme_dir_fn: |r| r.config.join("alacritty").join("themes"),
-        config_dir_fn: |r| r.config.join("alacritty"),
-    },
-    Terminal {
-        id: "wezterm",
-        format_id: "wezterm",
-        file_extension: "toml",
-        reload_hint: "Set `color_scheme` / load the file in wezterm.lua (live-reloads).",
-        can_import: false,
-        theme_dir_fn: |r| r.config.join("wezterm").join("colors"),
-        config_dir_fn: |r| r.config.join("wezterm"),
-    },
-    Terminal {
-        id: "iterm2",
-        format_id: "iterm2",
-        file_extension: "json",
-        reload_hint: "iTerm2 auto-loads the Dynamic Profile; select it in Settings > Profiles.",
-        can_import: false,
-        theme_dir_fn: |r| {
-            r.home
-                .join("Library")
-                .join("Application Support")
-                .join("iTerm2")
-                .join("DynamicProfiles")
-        },
-        config_dir_fn: |r| {
-            r.home
-                .join("Library")
-                .join("Application Support")
-                .join("iTerm2")
-        },
-    },
-    Terminal {
-        id: "foot",
-        format_id: "foot",
-        file_extension: "ini",
-        reload_hint: "Add `include=themes/<file>` to foot.ini.",
-        can_import: true,
-        theme_dir_fn: |r| r.config.join("foot").join("themes"),
-        config_dir_fn: |r| r.config.join("foot"),
-    },
-    Terminal {
-        id: "rio",
-        format_id: "rio",
-        file_extension: "toml",
-        reload_hint: "Set `theme = \"<name>\"` in rio config.",
-        can_import: true,
-        theme_dir_fn: |r| r.config.join("rio").join("themes"),
-        config_dir_fn: |r| r.config.join("rio"),
-    },
-    Terminal {
-        id: "konsole",
-        format_id: "konsole",
-        file_extension: "colorscheme",
-        reload_hint: "Pick the scheme in Konsole profile > Appearance.",
-        can_import: true,
-        theme_dir_fn: |r| r.data.join("konsole"),
-        config_dir_fn: |r| r.config.join("konsole"),
-    },
-];
 
 pub enum SaveOutcome {
     Written {
@@ -264,7 +149,7 @@ pub fn save_theme_at(
 fn resolve_target(
     override_path: Option<&Path>,
     roots: &Roots,
-    terminal: &Terminal,
+    terminal: &dyn TerminalAdapter,
     filename: Option<&str>,
     name: Option<&str>,
 ) -> Result<(PathBuf, PathBuf), SaveError> {
@@ -277,7 +162,7 @@ fn resolve_target(
                 .unwrap_or_else(|| PathBuf::from("."));
             return Ok((dir, over.to_path_buf()));
         }
-        let filename = resolve_filename(filename, name, terminal.file_extension)?;
+        let filename = resolve_filename(filename, name, terminal.file_extension())?;
         let path = over.join(&filename);
         if path.parent() != Some(over) {
             return Err(SaveError::InvalidFilename(filename));
@@ -286,7 +171,7 @@ fn resolve_target(
     }
 
     let theme_dir = terminal.theme_dir(roots);
-    let filename = resolve_filename(filename, name, terminal.file_extension)?;
+    let filename = resolve_filename(filename, name, terminal.file_extension())?;
     let path = theme_dir.join(&filename);
     if path.parent() != Some(theme_dir.as_path()) {
         return Err(SaveError::InvalidFilename(filename));
@@ -391,155 +276,13 @@ pub fn read_current_theme(roots: &Roots, terminal_id: &str) -> Result<Palette, I
     let terminal =
         find(terminal_id).ok_or_else(|| ImportError::UnknownTerminal(terminal_id.to_string()))?;
 
-    if !terminal.can_import {
+    if !terminal.can_import() {
         return Err(ImportError::Unsupported(format!(
             "import not supported for {terminal_id}"
         )));
     }
 
-    match terminal_id {
-        "ghostty" => ghostty_current(roots),
-        "kitty" => parse_active(
-            roots.config.join("kitty").join("kitty.conf"),
-            "kitty",
-            terminal_id,
-        ),
-        "alacritty" => parse_active(
-            roots.config.join("alacritty").join("alacritty.toml"),
-            "alacritty",
-            terminal_id,
-        ),
-        "foot" => parse_active(
-            roots.config.join("foot").join("foot.ini"),
-            "foot",
-            terminal_id,
-        ),
-        "rio" => rio_current(roots),
-        "konsole" => konsole_current(roots),
-        other => Err(ImportError::Unsupported(format!(
-            "import not supported for {other}"
-        ))),
-    }
-}
-
-fn ghostty_current(roots: &Roots) -> Result<Palette, ImportError> {
-    let ghostty = roots.config.join("ghostty");
-    let config = ghostty.join("config");
-
-    let text = fs::read_to_string(&config)
-        .map_err(|_| ImportError::NotFound("no ghostty config found".to_string()))?;
-    let theme = last_theme_value(&text).ok_or_else(|| {
-        ImportError::NotFound("no active theme set in ghostty config".to_string())
-    })?;
-
-    let user_theme = ghostty.join("themes").join(&theme);
-    let app_theme =
-        PathBuf::from("/Applications/Ghostty.app/Contents/Resources/ghostty/themes").join(&theme);
-
-    let theme_text = fs::read_to_string(&user_theme)
-        .or_else(|_| fs::read_to_string(&app_theme))
-        .map_err(|_| ImportError::NotFound(format!("theme file not found: {theme}")))?;
-
-    parse_text(&theme_text, "ghostty")
-}
-
-fn rio_current(roots: &Roots) -> Result<Palette, ImportError> {
-    let rio = roots.config.join("rio");
-    let config = rio.join("config.toml");
-
-    let text = fs::read_to_string(&config)
-        .map_err(|_| ImportError::NotFound("no rio config found".to_string()))?;
-
-    if let Some(theme) = rio_theme_value(&text) {
-        let theme_file = rio.join("themes").join(format!("{theme}.toml"));
-        let theme_text = fs::read_to_string(&theme_file)
-            .map_err(|_| ImportError::NotFound(format!("theme file not found: {theme}")))?;
-        return parse_text(&theme_text, "rio");
-    }
-
-    parse_text(&text, "rio")
-}
-
-fn rio_theme_value(text: &str) -> Option<String> {
-    let raw = last_theme_value(text)?;
-    let trimmed = raw.trim_matches(|c| c == '"' || c == '\'');
-    (!trimmed.is_empty()).then(|| trimmed.to_string())
-}
-
-fn konsole_current(roots: &Roots) -> Result<Palette, ImportError> {
-    let data = roots.data.join("konsole");
-    let konsolerc = roots.config.join("konsole").join("konsolerc");
-
-    let rc = fs::read_to_string(&konsolerc)
-        .map_err(|_| ImportError::NotFound("no konsole config found".to_string()))?;
-    let profile = ini_value(&rc, "Desktop Entry", "DefaultProfile")
-        .ok_or_else(|| ImportError::NotFound("no default konsole profile set".to_string()))?;
-
-    let profile_text = fs::read_to_string(data.join(&profile))
-        .map_err(|_| ImportError::NotFound(format!("konsole profile not found: {profile}")))?;
-    let scheme = ini_value(&profile_text, "Appearance", "ColorScheme").ok_or_else(|| {
-        ImportError::NotFound("no color scheme set in konsole profile".to_string())
-    })?;
-
-    let scheme_path = data.join(format!("{scheme}.colorscheme"));
-    let text = fs::read_to_string(&scheme_path)
-        .map_err(|_| ImportError::NotFound(format!("konsole scheme not found: {scheme}")))?;
-    parse_text(&text, "konsole")
-}
-
-fn ini_value(text: &str, section: &str, key: &str) -> Option<String> {
-    let mut in_section = false;
-    for line in text.lines() {
-        let line = line.trim();
-        if let Some(name) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-            in_section = name.trim() == section;
-            continue;
-        }
-        if !in_section {
-            continue;
-        }
-        if let Some((k, v)) = line.split_once('=') {
-            if k.trim() == key {
-                let v = v.trim();
-                if !v.is_empty() {
-                    return Some(v.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-fn parse_active(path: PathBuf, format_id: &str, terminal_id: &str) -> Result<Palette, ImportError> {
-    let text = fs::read_to_string(&path)
-        .map_err(|_| ImportError::NotFound(format!("no active theme found for {terminal_id}")))?;
-    parse_text(&text, format_id)
-}
-
-fn parse_text(text: &str, format_id: &str) -> Result<Palette, ImportError> {
-    let format = format_by_id(format_id).expect("terminal format_id is a registered core format");
-    format
-        .import(text)
-        .map_err(|e| ImportError::Parse(e.to_string()))
-}
-
-fn last_theme_value(text: &str) -> Option<String> {
-    let mut found = None;
-    for line in text.lines() {
-        let line = line.trim();
-        if line.starts_with('#') {
-            continue;
-        }
-        if let Some((key, value)) = line.split_once('=') {
-            if key.trim() == "theme" {
-                let value = value.trim();
-                if !value.is_empty() {
-                    found = Some(value.to_string());
-                }
-            }
-        }
-    }
-    found
+    terminal.current_theme(roots)
 }
 
 #[cfg(test)]
@@ -640,7 +383,7 @@ mod tests {
     fn every_terminal_id_and_format_resolve() {
         assert_eq!(terminals().len(), 8);
         for t in terminals() {
-            assert!(find(t.id).is_some());
+            assert!(find(t.id()).is_some());
             assert!(!t.display_name().is_empty());
         }
         assert!(find("nope").is_none());
@@ -687,43 +430,6 @@ mod tests {
         let roots = Roots::from_env();
         assert!(!roots.home.as_os_str().is_empty());
         assert!(!roots.config.as_os_str().is_empty());
-    }
-
-    #[test]
-    fn iterm2_present_tracks_app_support_dir_and_writes_to_home() {
-        let tmp = tempfile::tempdir().unwrap();
-        let roots = Roots {
-            home: tmp.path().to_path_buf(),
-            config: tmp.path().join(".config"),
-            data: tmp.path().join(".local").join("share"),
-        };
-        let iterm2 = find("iterm2").unwrap();
-
-        assert_eq!(
-            iterm2.theme_dir(&roots),
-            tmp.path()
-                .join("Library")
-                .join("Application Support")
-                .join("iTerm2")
-                .join("DynamicProfiles")
-        );
-
-        let support = tmp
-            .path()
-            .join("Library")
-            .join("Application Support")
-            .join("iTerm2");
-        assert_eq!(iterm2.config_dir(&roots), support);
-        assert!(
-            !iterm2.present(&roots),
-            "absent before the support dir exists"
-        );
-
-        std::fs::create_dir_all(&support).unwrap();
-        assert!(
-            iterm2.present(&roots),
-            "present once the support dir exists"
-        );
     }
 
     fn temp_roots() -> (tempfile::TempDir, Roots) {
@@ -1020,155 +726,10 @@ mod tests {
     }
 
     #[test]
-    fn current_ghostty_parses_active_theme() {
-        let (_tmp, roots) = temp_roots();
-        let ghostty = roots.config.join("ghostty");
-        fs::create_dir_all(ghostty.join("themes")).unwrap();
-        fs::write(
-            ghostty.join("config"),
-            "# my ghostty config\nfont-family = Fira Code\ntheme = citrus\n",
-        )
-        .unwrap();
-        let theme_text = format_by_id("ghostty").unwrap().export(&Palette::default());
-        fs::write(ghostty.join("themes").join("citrus"), &theme_text).unwrap();
-
-        let palette = read_current_theme(&roots, "ghostty").ok().unwrap();
-        let expected = format_by_id("ghostty")
-            .unwrap()
-            .import(&theme_text)
-            .unwrap();
-        assert_eq!(palette, expected);
-        assert_eq!(palette.background.to_hex(), "#f0e5ac");
-        assert_eq!(palette.ansi[1].to_hex(), "#b44c37");
-    }
-
-    #[test]
-    fn current_ghostty_missing_config_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        let err = read_current_theme(&roots, "ghostty").err().unwrap();
-        assert!(matches!(err, ImportError::NotFound(_)));
-    }
-
-    #[test]
-    fn current_import_unsupported_terminal() {
-        let (_tmp, roots) = temp_roots();
-        let err = read_current_theme(&roots, "wezterm").err().unwrap();
-        assert!(matches!(err, ImportError::Unsupported(_)));
-    }
-
-    #[test]
     fn current_unknown_terminal() {
         let (_tmp, roots) = temp_roots();
         let err = read_current_theme(&roots, "nope").err().unwrap();
         assert!(matches!(err, ImportError::UnknownTerminal(_)));
-    }
-
-    #[test]
-    fn current_kitty_parses_active_conf() {
-        let (_tmp, roots) = temp_roots();
-        let kitty = roots.config.join("kitty");
-        fs::create_dir_all(&kitty).unwrap();
-        let text = format_by_id("kitty").unwrap().export(&Palette::default());
-        fs::write(kitty.join("kitty.conf"), &text).unwrap();
-
-        let palette = read_current_theme(&roots, "kitty").ok().unwrap();
-        assert_eq!(palette.background.to_hex(), "#f0e5ac");
-    }
-
-    #[test]
-    fn current_alacritty_parses_active_toml() {
-        let (_tmp, roots) = temp_roots();
-        let ala = roots.config.join("alacritty");
-        fs::create_dir_all(&ala).unwrap();
-        let text = format_by_id("alacritty")
-            .unwrap()
-            .export(&Palette::default());
-        fs::write(ala.join("alacritty.toml"), &text).unwrap();
-
-        let palette = read_current_theme(&roots, "alacritty").ok().unwrap();
-        assert_eq!(palette.background.to_hex(), "#f0e5ac");
-    }
-
-    #[test]
-    fn current_kitty_missing_conf_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        let err = read_current_theme(&roots, "kitty").err().unwrap();
-        assert!(matches!(err, ImportError::NotFound(_)));
-    }
-
-    #[test]
-    fn current_malformed_theme_is_parse_error() {
-        let (_tmp, roots) = temp_roots();
-        let kitty = roots.config.join("kitty");
-        fs::create_dir_all(&kitty).unwrap();
-        fs::write(kitty.join("kitty.conf"), "background not-a-hex-color\n").unwrap();
-
-        let err = read_current_theme(&roots, "kitty").err().unwrap();
-        assert!(matches!(err, ImportError::Parse(_)));
-    }
-
-    #[test]
-    fn current_ghostty_theme_file_missing_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        let ghostty = roots.config.join("ghostty");
-        fs::create_dir_all(&ghostty).unwrap();
-        fs::write(ghostty.join("config"), "theme = nonexistent-theme-xyz\n").unwrap();
-
-        let err = read_current_theme(&roots, "ghostty").err().unwrap();
-        match err {
-            ImportError::NotFound(msg) => assert!(msg.contains("nonexistent-theme-xyz")),
-            _ => panic!("expected NotFound"),
-        }
-    }
-
-    #[test]
-    fn current_ghostty_no_theme_line_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        let ghostty = roots.config.join("ghostty");
-        fs::create_dir_all(&ghostty).unwrap();
-        fs::write(
-            ghostty.join("config"),
-            "# theme = commented\nfont-family = Fira\ntheme =\n",
-        )
-        .unwrap();
-
-        let err = read_current_theme(&roots, "ghostty").err().unwrap();
-        match err {
-            ImportError::NotFound(msg) => assert!(msg.contains("no active theme set")),
-            _ => panic!("expected NotFound"),
-        }
-    }
-
-    #[test]
-    fn last_theme_value_picks_last_noncomment_nonempty() {
-        assert_eq!(
-            last_theme_value("theme = alpha\ntheme = beta\n"),
-            Some("beta".to_string())
-        );
-        assert_eq!(
-            last_theme_value("# theme = nope\nfont = x\ntheme = gamma\n"),
-            Some("gamma".to_string())
-        );
-        assert_eq!(last_theme_value("theme =\n"), None);
-        assert_eq!(last_theme_value("font-family = Fira\n"), None);
-        assert_eq!(last_theme_value(""), None);
-    }
-
-    #[test]
-    fn iterm2_writes_dynamic_profile_into_app_support() {
-        let (_tmp, roots) = temp_roots();
-        let td = find("iterm2").unwrap().theme_dir(&roots);
-        assert_eq!(
-            td,
-            roots
-                .home
-                .join("Library")
-                .join("Application Support")
-                .join("iTerm2")
-                .join("DynamicProfiles")
-        );
-        assert_eq!(find("iterm2").unwrap().file_extension, "json");
-        assert!(!find("iterm2").unwrap().can_import);
     }
 
     #[test]
@@ -1244,118 +805,5 @@ mod tests {
             }
             SaveOutcome::Conflict { .. } => panic!("unexpected conflict"),
         }
-    }
-
-    #[test]
-    fn current_rio_follows_theme_reference() {
-        let (_tmp, roots) = temp_roots();
-        let rio = roots.config.join("rio");
-        fs::create_dir_all(rio.join("themes")).unwrap();
-        fs::write(rio.join("config.toml"), "theme = \"citrus\"\n").unwrap();
-        let text = format_by_id("rio").unwrap().export(&Palette::default());
-        fs::write(rio.join("themes").join("citrus.toml"), &text).unwrap();
-
-        let palette = read_current_theme(&roots, "rio").ok().unwrap();
-        assert_eq!(palette.background.to_hex(), "#f0e5ac");
-    }
-
-    #[test]
-    fn current_rio_parses_inline_colors_without_theme_ref() {
-        let (_tmp, roots) = temp_roots();
-        let rio = roots.config.join("rio");
-        fs::create_dir_all(&rio).unwrap();
-        let text = format_by_id("rio").unwrap().export(&Palette::default());
-        fs::write(rio.join("config.toml"), &text).unwrap();
-
-        let palette = read_current_theme(&roots, "rio").ok().unwrap();
-        assert_eq!(palette.background.to_hex(), "#f0e5ac");
-    }
-
-    #[test]
-    fn current_rio_missing_config_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        assert!(matches!(
-            read_current_theme(&roots, "rio").err().unwrap(),
-            ImportError::NotFound(_)
-        ));
-    }
-
-    #[test]
-    fn current_rio_missing_referenced_theme_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        let rio = roots.config.join("rio");
-        fs::create_dir_all(&rio).unwrap();
-        fs::write(rio.join("config.toml"), "theme = \"ghost\"\n").unwrap();
-        match read_current_theme(&roots, "rio").err().unwrap() {
-            ImportError::NotFound(msg) => assert!(msg.contains("ghost")),
-            _ => panic!("expected NotFound"),
-        }
-    }
-
-    #[test]
-    fn current_foot_missing_config_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        assert!(matches!(
-            read_current_theme(&roots, "foot").err().unwrap(),
-            ImportError::NotFound(_)
-        ));
-    }
-
-    #[test]
-    fn current_konsole_missing_config_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        assert!(matches!(
-            read_current_theme(&roots, "konsole").err().unwrap(),
-            ImportError::NotFound(_)
-        ));
-    }
-
-    #[test]
-    fn current_konsole_no_default_profile_is_not_found() {
-        let (_tmp, roots) = temp_roots();
-        let konsole = roots.config.join("konsole");
-        fs::create_dir_all(&konsole).unwrap();
-        fs::write(konsole.join("konsolerc"), "[General]\nfoo=bar\n").unwrap();
-        match read_current_theme(&roots, "konsole").err().unwrap() {
-            ImportError::NotFound(msg) => assert!(msg.contains("default konsole profile")),
-            _ => panic!("expected NotFound"),
-        }
-    }
-
-    #[test]
-    fn current_iterm2_import_unsupported() {
-        let (_tmp, roots) = temp_roots();
-        assert!(matches!(
-            read_current_theme(&roots, "iterm2").err().unwrap(),
-            ImportError::Unsupported(_)
-        ));
-    }
-
-    #[test]
-    fn rio_theme_value_strips_quotes() {
-        assert_eq!(
-            rio_theme_value("theme = \"citrus\"\n"),
-            Some("citrus".to_string())
-        );
-        assert_eq!(rio_theme_value("theme = 'x'\n"), Some("x".to_string()));
-        assert_eq!(rio_theme_value("theme = \"\"\n"), None);
-        assert_eq!(rio_theme_value("font = x\n"), None);
-    }
-
-    #[test]
-    fn ini_value_reads_section_scoped_key() {
-        let text =
-            "[Desktop Entry]\nDefaultProfile=Citrus.profile\n\n[Appearance]\nColorScheme=Citrus\n";
-        assert_eq!(
-            ini_value(text, "Desktop Entry", "DefaultProfile"),
-            Some("Citrus.profile".to_string())
-        );
-        assert_eq!(
-            ini_value(text, "Appearance", "ColorScheme"),
-            Some("Citrus".to_string())
-        );
-        assert_eq!(ini_value(text, "Desktop Entry", "ColorScheme"), None);
-        assert_eq!(ini_value(text, "Appearance", "Missing"), None);
-        assert_eq!(ini_value(text, "Nope", "ColorScheme"), None);
     }
 }

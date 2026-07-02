@@ -14,6 +14,9 @@ use citrine_core::formats::{all_formats, format_by_id};
 use citrine_core::palette::Palette;
 use serde::Serialize;
 
+use crate::adapters::adapter_by_id;
+use crate::config::Roots;
+
 #[derive(clap::Args, Debug)]
 pub struct ExportArgs {
     #[arg(required_unless_present = "list", help = "Format id to export")]
@@ -54,6 +57,42 @@ pub struct ProbeArgs {
         help = "Reply timeout in milliseconds"
     )]
     timeout_ms: u64,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct VerifySetupArgs {
+    #[arg(help = "Terminal id to scaffold")]
+    terminal: String,
+    #[arg(long, value_name = "FILE", help = "Palette JSON file")]
+    palette: PathBuf,
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "Scratch directory for the generated files"
+    )]
+    dir: PathBuf,
+    #[arg(
+        long,
+        value_name = "CMD",
+        help = "Shell command the terminal runs to probe itself"
+    )]
+    probe_cmd: String,
+}
+
+pub fn run_verify_setup(args: VerifySetupArgs) -> Result<(), Box<dyn Error>> {
+    let Some(adapter) = adapter_by_id(&args.terminal) else {
+        eprintln!("unknown terminal id: {}", args.terminal);
+        std::process::exit(2);
+    };
+    let palette = load_palette(&args.palette)?;
+    let roots = Roots::from_env();
+    let manifest = adapter.scaffold(&roots, &args.dir, &palette, &args.probe_cmd)?;
+    let mut text = serde_json::to_string_pretty(&manifest)?;
+    text.push('\n');
+    let mut stdout = std::io::stdout();
+    stdout.write_all(text.as_bytes())?;
+    stdout.flush()?;
+    Ok(())
 }
 
 pub fn run_export(args: ExportArgs) -> Result<(), Box<dyn Error>> {

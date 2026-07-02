@@ -16,12 +16,8 @@ channel_ok() {
 
 mk_tmp
 RESULT="$CITRINE_TMP/result.json"
-SCHEME_DIR="$HOME/.local/share/konsole"
-mkdir -p "$SCHEME_DIR"
-"$CITRINE_BIN" export konsole --palette "$SENTINEL" --out "$SCHEME_DIR/CitrineSentinel.colorscheme"
-printf '[Appearance]\nColorScheme=CitrineSentinel\n\n[General]\nName=citrine\nParent=FALLBACK/\n' > "$SCHEME_DIR/citrine.profile"
-mkdir -p "$HOME/.config"
-printf '[Desktop Entry]\nDefaultProfile=citrine.profile\n' > "$HOME/.config/konsolerc"
+SCHEME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/konsole"
+"$CITRINE_BIN" verify-setup konsole --palette "$SENTINEL" --dir "$CITRINE_TMP" --probe-cmd "$(probe_cmd)"
 mkdir -p verify-out
 ls -la "$SCHEME_DIR" > verify-out/konsole-datadir.txt 2>&1 || true
 cp "$SCHEME_DIR/CitrineSentinel.colorscheme" verify-out/ 2>/dev/null || true
@@ -29,7 +25,6 @@ konsole --list-profiles > verify-out/konsole-profiles.txt 2>&1 || true
 KONSOLE_PROFILE_NAME=citrine konsole --profile "$SCHEME_DIR/citrine.profile" -p ColorScheme=CitrineSentinel -e sh -c "$(probe_cmd)" > "$CITRINE_TMP/konsole.log" 2>&1 &
 track_pid $!
 wait_for_file "$RESULT" 60 || true
-mkdir -p verify-out
 cp "$CITRINE_TMP/konsole.log" verify-out/konsole.log 2>/dev/null || true
 if [ ! -s "$RESULT" ] || ! grep -Eq '"pass"[[:space:]]*:[[:space:]]*true' "$RESULT"; then
   cp "$RESULT" verify-out/konsole-osc-result.json 2>/dev/null || true

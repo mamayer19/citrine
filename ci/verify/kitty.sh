@@ -3,8 +3,7 @@ set -eu
 . "$(dirname "$0")/common.sh"
 mk_tmp
 RESULT="$CITRINE_TMP/result.json"
-"$CITRINE_BIN" export kitty --palette "$SENTINEL" --out "$CITRINE_TMP/theme.conf"
-printf 'include theme.conf\nallow_remote_control yes\n' > "$CITRINE_TMP/kitty.conf"
+"$CITRINE_BIN" verify-setup kitty --palette "$SENTINEL" --dir "$CITRINE_TMP" --probe-cmd "$(probe_cmd)"
 if ! kitty --config "$CITRINE_TMP/kitty.conf" --debug-config 2>/dev/null | grep -qi color0; then
   grep -qi color0 "$CITRINE_TMP/theme.conf"
 fi

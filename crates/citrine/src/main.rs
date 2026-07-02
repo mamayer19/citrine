@@ -1,3 +1,4 @@
+mod adapters;
 mod config;
 mod library;
 mod plumbing;
@@ -20,6 +21,8 @@ enum Command {
     Export(plumbing::ExportArgs),
     #[command(about = "Query the hosting terminal colors and compare them to an expected palette")]
     Probe(plumbing::ProbeArgs),
+    #[command(about = "Write the verify-harness config files for a terminal and print a manifest")]
+    VerifySetup(plumbing::VerifySetupArgs),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,5 +30,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(Command::Tui) | None => tui::run(),
         Some(Command::Export(args)) => plumbing::run_export(args),
         Some(Command::Probe(args)) => std::process::exit(plumbing::run_probe(args)?),
+        Some(Command::VerifySetup(args)) => plumbing::run_verify_setup(args),
     }
 }

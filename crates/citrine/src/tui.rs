@@ -400,7 +400,7 @@ impl App {
             .settings
             .last_terminal
             .as_deref()
-            .and_then(|id| config::terminals().iter().position(|t| t.id == id))
+            .and_then(|id| config::terminals().iter().position(|t| t.id() == id))
             .unwrap_or(0);
         self.mode = Mode::Picker { index, set_path };
         self.status = if set_path {
@@ -416,7 +416,7 @@ impl App {
             self.mode = Mode::Normal;
             return;
         };
-        let format = format_by_id(terminal.format_id).expect("terminal format is registered");
+        let format = format_by_id(terminal.format_id()).expect("terminal format is registered");
         let content = format.export(&self.palette);
         let name = self.palette.name.clone();
 
@@ -436,7 +436,7 @@ impl App {
                 self.status = format!(
                     "Applied → {}{bak}  ·  {}",
                     path.display(),
-                    terminal.reload_hint
+                    terminal.reload_hint()
                 );
                 self.settings.last_terminal = Some(terminal_id.to_string());
                 self.mode = Mode::Normal;
@@ -652,7 +652,7 @@ impl App {
                 self.mode = Mode::Picker { index, set_path };
             }
             KeyCode::Enter => {
-                let id = terminals[index].id;
+                let id = terminals[index].id();
                 if set_path {
                     self.begin_path_prompt(id);
                 } else {
@@ -660,7 +660,7 @@ impl App {
                 }
             }
             KeyCode::Char('p') => {
-                let id = terminals[index].id;
+                let id = terminals[index].id();
                 self.begin_path_prompt(id);
             }
             KeyCode::Esc | KeyCode::Char('q') => {
@@ -906,7 +906,7 @@ impl App {
             let over = self
                 .settings
                 .paths
-                .get(t.id)
+                .get(t.id())
                 .map(|p| format!("  → {}", p.display()))
                 .unwrap_or_default();
             lines.push(Line::from(vec![
@@ -1931,7 +1931,11 @@ mod tests {
         assert!(s.contains("Apply Theme"), "picker title\n{s}");
         assert_eq!(config::terminals().len(), 8);
         for t in config::terminals() {
-            assert!(s.contains(t.display_name()), "missing {}", t.display_name());
+            assert!(
+                s.contains(&t.display_name()),
+                "missing {}",
+                t.display_name()
+            );
         }
         press(&mut app, KeyCode::Enter);
         assert!(matches!(app.mode, Mode::Normal));

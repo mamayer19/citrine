@@ -9,8 +9,7 @@ if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
   chmod 700 "$XDG_RUNTIME_DIR"
   export XDG_RUNTIME_DIR
 fi
-"$CITRINE_BIN" export foot --palette "$SENTINEL" --out "$CITRINE_TMP/theme.ini"
-printf 'include=%s\n' "$CITRINE_TMP/theme.ini" > "$CITRINE_TMP/foot.ini"
+"$CITRINE_BIN" verify-setup foot --palette "$SENTINEL" --dir "$CITRINE_TMP" --probe-cmd "$(probe_cmd)"
 foot --config "$CITRINE_TMP/foot.ini" --check-config
 WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
   cage -- foot --config "$CITRINE_TMP/foot.ini" sh -c "$(probe_cmd)" > "$CITRINE_TMP/cage.log" 2>&1 &
