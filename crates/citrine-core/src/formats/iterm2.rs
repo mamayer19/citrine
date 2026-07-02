@@ -54,6 +54,7 @@ impl ThemeFormat for Iterm2 {
             "Name": p.name,
             "Guid": guid_for(&p.name),
             "Dynamic Profile Parent Name": "Default",
+            "Use Separate Colors for Light and Dark Mode": false,
             "Ansi 0 Color": color_value(p.ansi[0]),
             "Ansi 1 Color": color_value(p.ansi[1]),
             "Ansi 2 Color": color_value(p.ansi[2]),
