@@ -58,6 +58,9 @@ plutil -convert xml1 -o /dev/null "$tmp/citrine-sentinel.json"
 cp "$tmp/citrine-sentinel.json" "$PROFILE_FILE"
 cp "$tmp/citrine-sentinel.json" "$OUT_DIR/iterm2-profile.json"
 
+if [ "${CI:-}" = "true" ] && [ -d /Applications/iTerm.app ]; then
+  xattr -dr com.apple.quarantine /Applications/iTerm.app >/dev/null 2>&1 || true
+fi
 echo "iterm2: extracting guid"
 GUID=$(sed -n 's/.*"Guid"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PROFILE_FILE" | head -1)
 echo "iterm2: guid=$GUID"
