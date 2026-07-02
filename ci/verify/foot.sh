@@ -12,13 +12,10 @@ fi
 "$CITRINE_BIN" export foot --palette "$SENTINEL" --out "$CITRINE_TMP/theme.ini"
 printf 'include=%s\n' "$CITRINE_TMP/theme.ini" > "$CITRINE_TMP/foot.ini"
 foot --config "$CITRINE_TMP/foot.ini" --check-config
-weston --backend=headless-backend.so --socket=wl-citrine --idle-time=0 > "$CITRINE_TMP/weston.log" 2>&1 &
-track_pid $!
-sleep 2
-WAYLAND_DISPLAY=wl-citrine foot --config "$CITRINE_TMP/foot.ini" sh -c "$(probe_cmd)" > "$CITRINE_TMP/foot.log" 2>&1 &
+WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
+  cage -- foot --config "$CITRINE_TMP/foot.ini" sh -c "$(probe_cmd)" > "$CITRINE_TMP/cage.log" 2>&1 &
 track_pid $!
 wait_for_file "$RESULT" 60 || true
 mkdir -p verify-out
-cp "$CITRINE_TMP/weston.log" verify-out/weston.log 2>/dev/null || true
-cp "$CITRINE_TMP/foot.log" verify-out/foot.log 2>/dev/null || true
+cp "$CITRINE_TMP/cage.log" verify-out/cage.log 2>/dev/null || true
 finish "$RESULT"

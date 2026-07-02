@@ -26,13 +26,19 @@ PROFILE_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
 PROFILE_FILE="$PROFILE_DIR/citrine-sentinel.json"
 LAUNCHED=0
 
+WATCHDOG_PID=""
 cleanup() {
+  if [ -n "$WATCHDOG_PID" ]; then
+    kill "$WATCHDOG_PID" >/dev/null 2>&1 || true
+  fi
   if [ "$LAUNCHED" -eq 1 ] && [ "${CI:-}" = "true" ]; then
     pkill -x iTerm2 >/dev/null 2>&1 || true
   fi
   rm -f "$PROFILE_FILE"
 }
 trap cleanup EXIT INT TERM
+( sleep 200 && kill -TERM $$ ) >/dev/null 2>&1 &
+WATCHDOG_PID=$!
 
 cat > "$tmp/run.sh" <<EOF
 #!/bin/sh
@@ -52,21 +58,27 @@ plutil -convert xml1 -o /dev/null "$tmp/citrine-sentinel.json"
 cp "$tmp/citrine-sentinel.json" "$PROFILE_FILE"
 cp "$tmp/citrine-sentinel.json" "$OUT_DIR/iterm2-profile.json"
 
-GUID=$(plutil -extract Profiles.0.Guid raw -o - "$PROFILE_FILE")
+echo "iterm2: extracting guid"
+GUID=$(sed -n 's/.*"Guid"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PROFILE_FILE" | head -1)
+echo "iterm2: guid=$GUID"
 defaults write com.googlecode.iterm2 SUEnableAutomaticChecks -bool false
 defaults write com.googlecode.iterm2 PromptOnQuit -bool false
 defaults write com.googlecode.iterm2 NoSyncTipsDisabled -bool true
 defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "$GUID"
+echo "iterm2: defaults written, launching"
 
-open -na iTerm
+open -na iTerm >/dev/null 2>&1 &
 LAUNCHED=1
+echo "iterm2: open dispatched, waiting for result"
 
 if ! wait_for_file "$tmp/result.json" 40; then
+  echo "iterm2: no result yet, trying applescript window"
   osascript -e 'tell application "iTerm2" to create window with profile "Citrine Sentinel"' > "$OUT_DIR/iterm2-launch.log" 2>&1 &
   OSA_PID=$!
   wait_for_file "$tmp/result.json" 50 || true
   kill "$OSA_PID" >/dev/null 2>&1 || true
 fi
+echo "iterm2: wait phase done"
 
 if [ "${CI:-}" = "true" ]; then
   pkill -x iTerm2 >/dev/null 2>&1 || true

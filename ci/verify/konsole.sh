@@ -18,11 +18,13 @@ mk_tmp
 RESULT="$CITRINE_TMP/result.json"
 SCHEME_DIR="$HOME/.local/share/konsole"
 mkdir -p "$SCHEME_DIR"
-"$CITRINE_BIN" export konsole --palette "$SENTINEL" --out "$SCHEME_DIR/Citrine Sentinel.colorscheme"
-printf '[Appearance]\nColorScheme=Citrine Sentinel\n\n[General]\nName=citrine\nParent=FALLBACK/\n' > "$SCHEME_DIR/citrine.profile"
+"$CITRINE_BIN" export konsole --palette "$SENTINEL" --out "$SCHEME_DIR/CitrineSentinel.colorscheme"
+printf '[Appearance]\nColorScheme=CitrineSentinel\n\n[General]\nName=citrine\nParent=FALLBACK/\n' > "$SCHEME_DIR/citrine.profile"
 mkdir -p "$HOME/.config"
 printf '[Desktop Entry]\nDefaultProfile=citrine.profile\n' > "$HOME/.config/konsolerc"
-konsole --profile citrine.profile -e sh -c "$(probe_cmd)" > "$CITRINE_TMP/konsole.log" 2>&1 &
+mkdir -p verify-out
+ls -la "$SCHEME_DIR" > verify-out/konsole-datadir.txt 2>&1 || true
+konsole --profile citrine.profile -p ColorScheme=CitrineSentinel -e sh -c "$(probe_cmd)" > "$CITRINE_TMP/konsole.log" 2>&1 &
 track_pid $!
 wait_for_file "$RESULT" 60 || true
 mkdir -p verify-out

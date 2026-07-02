@@ -22,7 +22,7 @@ jobs:
             install: sudo apt-get update && sudo apt-get install -y alacritty xvfb libxkbcommon-x11-0
             experimental: false
           - term: foot
-            install: sudo apt-get update && sudo apt-get install -y foot weston
+            install: sudo apt-get update && sudo apt-get install -y foot cage
             experimental: false
           - term: konsole
             install: sudo apt-get update && sudo apt-get install -y konsole imagemagick xvfb dbus-x11
@@ -31,7 +31,7 @@ jobs:
             install: curl -fsSLo /tmp/wezterm.deb https://github.com/wez/wezterm/releases/download/20240203-110809-5046fc22/wezterm-20240203-110809-5046fc22.Ubuntu22.04.deb && sudo apt-get update && sudo apt-get install -y /tmp/wezterm.deb xvfb
             experimental: false
           - term: rio
-            install: gh release download --repo raphamorim/rio --pattern "*amd64_x11.deb" --output /tmp/rio.deb && sudo apt-get update && sudo apt-get install -y /tmp/rio.deb xvfb mesa-vulkan-drivers libvulkan1
+            install: gh release download --repo raphamorim/rio --pattern "*amd64_x11.deb" --output /tmp/rio.deb && sudo apt-get update && sudo apt-get install -y /tmp/rio.deb xvfb mesa-vulkan-drivers libvulkan1 libxkbcommon-x11-0
             experimental: true
     steps:
       - uses: actions/checkout@v4
