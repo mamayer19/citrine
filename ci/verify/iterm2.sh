@@ -27,8 +27,8 @@ PROFILE_FILE="$PROFILE_DIR/citrine-sentinel.json"
 LAUNCHED=0
 
 cleanup() {
-  if [ "$LAUNCHED" -eq 1 ]; then
-    osascript -e 'tell application "iTerm2" to quit' >/dev/null 2>&1 || true
+  if [ "$LAUNCHED" -eq 1 ] && [ "${CI:-}" = "true" ]; then
+    pkill -x iTerm2 >/dev/null 2>&1 || true
   fi
   rm -f "$PROFILE_FILE"
 }
@@ -52,18 +52,25 @@ plutil -convert xml1 -o /dev/null "$tmp/citrine-sentinel.json"
 cp "$tmp/citrine-sentinel.json" "$PROFILE_FILE"
 cp "$tmp/citrine-sentinel.json" "$OUT_DIR/iterm2-profile.json"
 
+GUID=$(plutil -extract Profiles.0.Guid raw -o - "$PROFILE_FILE")
 defaults write com.googlecode.iterm2 SUEnableAutomaticChecks -bool false
 defaults write com.googlecode.iterm2 PromptOnQuit -bool false
+defaults write com.googlecode.iterm2 NoSyncTipsDisabled -bool true
+defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "$GUID"
 
 open -na iTerm
 LAUNCHED=1
-sleep 6
 
-osascript -e 'tell application "iTerm2" to create window with profile "Citrine Sentinel"' > "$OUT_DIR/iterm2-launch.log" 2>&1
+if ! wait_for_file "$tmp/result.json" 40; then
+  osascript -e 'tell application "iTerm2" to create window with profile "Citrine Sentinel"' > "$OUT_DIR/iterm2-launch.log" 2>&1 &
+  OSA_PID=$!
+  wait_for_file "$tmp/result.json" 50 || true
+  kill "$OSA_PID" >/dev/null 2>&1 || true
+fi
 
-wait_for_file "$tmp/result.json" 60 || true
-
-osascript -e 'tell application "iTerm2" to quit' >/dev/null 2>&1 || true
+if [ "${CI:-}" = "true" ]; then
+  pkill -x iTerm2 >/dev/null 2>&1 || true
+fi
 LAUNCHED=0
 
 if [ ! -s "$tmp/result.json" ]; then

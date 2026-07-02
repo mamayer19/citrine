@@ -44,10 +44,11 @@ impl ThemeFormat for Foot {
             bare_hex(&p.selection_background)
         );
 
+        out.push_str("\n[cursor]\n");
         let _ = writeln!(
             out,
-            "cursor={} {}",
-            bare_hex(&p.background),
+            "color={} {}",
+            bare_hex(&p.cursor_text),
             bare_hex(&p.cursor)
         );
 
@@ -62,6 +63,7 @@ impl ThemeFormat for Foot {
         };
 
         let mut in_colors = false;
+        let mut in_cursor = false;
 
         for raw in text.lines() {
             let line = raw.trim();
@@ -71,6 +73,23 @@ impl ThemeFormat for Foot {
 
             if let Some(inner) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
                 in_colors = inner.trim().eq_ignore_ascii_case("colors");
+                in_cursor = inner.trim().eq_ignore_ascii_case("cursor");
+                continue;
+            }
+
+            if in_cursor {
+                let Some((key, value)) = line.split_once('=') else {
+                    continue;
+                };
+                if key.trim() == "color" {
+                    let parts: Vec<&str> = value.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        p.cursor_text = parse_hex(parts[0])?;
+                        p.cursor = parse_hex(parts[1])?;
+                    } else if parts.len() == 1 {
+                        p.cursor = parse_hex(parts[0])?;
+                    }
+                }
                 continue;
             }
 
@@ -169,7 +188,9 @@ mod tests {
         "bright7=eae0c6\n",
         "selection-foreground=4b4656\n",
         "selection-background=e6cf88\n",
-        "cursor=f0e5ac dd7714\n",
+        "\n",
+        "[cursor]\n",
+        "color=2b2820 dd7714\n",
     );
 
     #[test]
@@ -206,7 +227,7 @@ mod tests {
         assert_eq!(p.ansi[7], Color::rgb(0xcd, 0xc1, 0xab));
         assert_eq!(p.ansi[8], Color::rgb(0x6f, 0x6a, 0x80));
         assert_eq!(p.ansi[15], Color::rgb(0xea, 0xe0, 0xc6));
-        assert_eq!(p.cursor_text, Color::rgb(0xf0, 0xe5, 0xac));
+        assert_eq!(p.cursor_text, Color::rgb(0x2b, 0x28, 0x20));
         assert_eq!(p.cursor, Color::rgb(0xdd, 0x77, 0x14));
         assert_eq!(p.variant, Variant::Light);
     }
@@ -222,6 +243,7 @@ mod tests {
         assert_eq!(back.selection_background, original.selection_background);
         assert_eq!(back.selection_foreground, original.selection_foreground);
         assert_eq!(back.cursor, original.cursor);
+        assert_eq!(back.cursor_text, original.cursor_text);
         assert_eq!(back.ansi, original.ansi);
         assert_eq!(back.variant, Variant::Light);
     }
